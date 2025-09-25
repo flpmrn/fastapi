@@ -9,9 +9,9 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
 # Usa o nome do serviço interno do Docker para uma conexão mais rápida e segura
-QDRANT_HOST = os.getenv("QDRANT_HOST", "services_qdrant") 
+QDRANT_HOST = os.getenv("QDRANT_HOST", "services_qdrant")
 COLLECTION_NAME = "suporte_bling_v1"
-EMBEDDING_MODEL = "text-embedding-3-small" # Modelo correto
+EMBEDDING_MODEL = "text-embedding-3-small" # Modelo correto que usámos para carregar os dados
 CHAT_MODEL = "gpt-4o-mini"
 
 # --- Validação de Configurações ---
@@ -102,3 +102,4 @@ async def webhook(request: Request):
     except Exception as e:
         print(f"Erro no webhook: {e}")
         raise HTTPException(status_code=500, detail="Ocorreu um erro ao processar o webhook.")
+
