@@ -15,7 +15,7 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 QDRANT_HOST = os.getenv("QDRANT_HOST", "services_qdrant") 
 COLLECTION_NAME = "suporte_bling_v1"
 EMBEDDING_MODEL = "text-embedding-3-small"
-CHAT_MODEL = "gpt-4o-mini"
+CHAT_MODEL = "gpt-4.1-mini"
 
 # --- Validação de Configurações ---
 if not OPENAI_API_KEY or not QDRANT_API_KEY:
@@ -101,5 +101,6 @@ async def webhook(request: Request):
     except Exception as e:
         logger.error(f"Erro inesperado no webhook: {e}")
         raise HTTPException(status_code=500, detail="Ocorreu um erro ao processar o webhook.")
+
 
 
