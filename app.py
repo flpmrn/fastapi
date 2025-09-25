@@ -3,6 +3,7 @@ from openai import OpenAI
 from qdrant_client import QdrantClient
 import os
 import logging
+import json
 
 # Configuração do logging para ver os dados recebidos
 logging.basicConfig(level=logging.INFO)
@@ -100,3 +101,4 @@ async def webhook(request: Request):
     except Exception as e:
         logger.error(f"Erro inesperado no webhook: {e}")
         raise HTTPException(status_code=500, detail="Ocorreu um erro ao processar o webhook.")
+
