@@ -2,21 +2,23 @@ from fastapi import FastAPI, Request, HTTPException
 from openai import OpenAI
 from qdrant_client import QdrantClient
 import os
+import logging
+
+# Configuração do logging para ver os dados recebidos
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # --- Configurações ---
-# Carrega as chaves a partir das variáveis de ambiente para segurança
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
-
-# Usa o nome do serviço interno do Docker para uma conexão mais rápida e segura
-QDRANT_HOST = os.getenv("QDRANT_HOST", "services_qdrant")
+QDRANT_HOST = os.getenv("QDRANT_HOST", "services_qdrant") 
 COLLECTION_NAME = "suporte_bling_v1"
-EMBEDDING_MODEL = "text-embedding-3-small" # Modelo correto que usámos para carregar os dados
+EMBEDDING_MODEL = "text-embedding-3-small"
 CHAT_MODEL = "gpt-4o-mini"
 
 # --- Validação de Configurações ---
 if not OPENAI_API_KEY or not QDRANT_API_KEY:
-    raise RuntimeError("As chaves de API OPENAI_API_KEY e QDRANT_API_KEY devem ser definidas nas variáveis de ambiente.")
+    raise RuntimeError("As chaves de API OPENAI_API_KEY e QDRANT_API_KEY devem ser definidas.")
 
 # --- Inicialização dos Clientes ---
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -25,33 +27,26 @@ qdrant_client = QdrantClient(host=QDRANT_HOST, port=6333, api_key=QDRANT_API_KEY
 app = FastAPI(
     title="ITCIA RAG API para Suporte Bling",
     description="Uma API que recebe perguntas de utilizadores, busca contexto na base de conhecimento do Bling (Qdrant) e gera respostas com um modelo de linguagem.",
-    version="1.0.0"
+    version="1.0.1"
 )
 
 def buscar_resposta_rag(query: str):
-    """
-    Executa o fluxo RAG (Retrieval-Augmented Generation).
-    """
     try:
-        # 1. Gerar embedding da pergunta do utilizador
         embedding = client.embeddings.create(
             model=EMBEDDING_MODEL,
             input=query
         ).data[0].embedding
 
-        # 2. Buscar no Qdrant por vetores similares
         search_results = qdrant_client.search(
             collection_name=COLLECTION_NAME,
             query_vector=embedding,
-            limit=3 # Pega os 3 resultados mais relevantes
+            limit=3
         )
 
-        # 3. Montar o contexto com base nos resultados
         contexto = "\n\n---\n\n".join(
             [result.payload.get("resposta_estruturada", "") for result in search_results]
         )
 
-        # 4. Gerar a resposta final usando o modelo de chat com o contexto
         system_prompt = (
             "Você é o Nexo, um assistente de IA especialista no ERP Bling. Sua missão é responder às perguntas dos usuários de forma clara, "
             "objetiva e amigável, baseando-se estritamente no contexto fornecido. Se a resposta não estiver no contexto, "
@@ -66,40 +61,60 @@ def buscar_resposta_rag(query: str):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": human_prompt}
             ],
-            temperature=0.2 # Respostas mais diretas e menos criativas
+            temperature=0.2
         )
 
         return response.choices[0].message.content
-
     except Exception as e:
-        print(f"Ocorreu um erro no fluxo RAG: {e}")
+        logger.error(f"Ocorreu um erro no fluxo RAG: {e}")
         raise HTTPException(status_code=500, detail="Ocorreu um erro interno ao processar a sua pergunta.")
 
 @app.get("/", tags=["Status"])
 def healthcheck():
-    """Verifica se a API está online."""
     return {"status": "ITCIA RAG API online!"}
 
 @app.post("/webhook", tags=["Agente"])
 async def webhook(request: Request):
-    """
-    Endpoint principal para receber as perguntas dos utilizadores (via Evolution API, por exemplo).
-    """
     try:
         data = await request.json()
+        logger.info(f"Webhook recebido: {json.dumps(data, indent=2)}") # Log para depuração
         
-        # Adapte esta linha conforme o formato exato do payload da Evolution API
-        mensagem_usuario = data.get("message", {}).get("text", "")
+        # --- CORREÇÃO PRINCIPAL ---
+        # O texto da mensagem de texto simples vem neste caminho.
+        mensagem_usuario = data.get("data", {}).get("message", {}).get("conversation")
         
         if not mensagem_usuario:
-            raise HTTPException(status_code=400, detail="O campo 'message.text' não foi encontrado no corpo da requisição.")
+            # Adiciona uma verificação para outros tipos de mensagem, se necessário no futuro
+            logger.warning(f"O campo 'data.message.conversation' nao foi encontrado no payload.")
+            # Retorna 200 OK para evitar que a Evolution API tente reenviar.
+            return {"status": "Payload não continha mensagem de texto, ignorado."}
 
         resposta_ia = buscar_resposta_rag(mensagem_usuario)
         
-        # O formato da resposta pode ser ajustado para o que a Evolution API espera
+        # Retorna a resposta no formato que a Evolution API espera
         return {"reply": resposta_ia}
 
+    except json.JSONDecodeError:
+        logger.error("Erro ao fazer o parse do JSON do webhook.")
+        raise HTTPException(status_code=400, detail="Corpo da requisicao invalido, nao e um JSON.")
     except Exception as e:
-        print(f"Erro no webhook: {e}")
+        logger.error(f"Erro inesperado no webhook: {e}")
         raise HTTPException(status_code=500, detail="Ocorreu um erro ao processar o webhook.")
+```
+
+### **O que foi alterado?**
+
+1.  **Linha 89:** Alterámos o caminho de `data.get("message", {}).get("text", "")` para `data.get("data", {}).get("message", {}).get("conversation")`.
+2.  **Tratamento de Erros Melhorado:** O código agora não devolve um erro `500` se receber um evento que não seja uma mensagem de texto (ex: alguém entra num grupo). Ele simplesmente ignora e responde `200 OK`, o que é mais robusto.
+3.  **Logging:** Adicionei logs (`logger.info`) para que, no futuro, você possa ver nos logs do `rag-api` exatamente o que a Evolution API está a enviar, facilitando a depuração.
+
+### **Próximos Passos**
+
+1.  **Atualize `app.py`:** Substitua o código no seu ficheiro `app.py` local por esta nova versão.
+2.  **Envie para o GitHub:** Faça o commit e o push da alteração para o seu repositório.
+    ```bash
+    git add app.py
+    git commit -m "Corrige o parse do payload do webhook da Evolution API"
+    git push
+    
 
