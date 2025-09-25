@@ -23,7 +23,7 @@ if not OPENAI_API_KEY or not QDRANT_API_KEY:
 
 # --- Inicialização dos Clientes ---
 client = OpenAI(api_key=OPENAI_API_KEY)
-qdrant_client = QdrantClient(host=QDRANT_HOST, port=6333, api_key=QDRANT_API_KEY)
+qdrant_client = QdrantClient(host=QDRANT_HOST, port=6333, api_key=QDRANT_API_KEY, https=False)
 
 app = FastAPI(
     title="ITCIA RAG API para Suporte Bling",
@@ -101,4 +101,5 @@ async def webhook(request: Request):
     except Exception as e:
         logger.error(f"Erro inesperado no webhook: {e}")
         raise HTTPException(status_code=500, detail="Ocorreu um erro ao processar o webhook.")
+
 
