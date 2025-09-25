@@ -100,21 +100,3 @@ async def webhook(request: Request):
     except Exception as e:
         logger.error(f"Erro inesperado no webhook: {e}")
         raise HTTPException(status_code=500, detail="Ocorreu um erro ao processar o webhook.")
-```
-
-### **O que foi alterado?**
-
-1.  **Linha 89:** Alterámos o caminho de `data.get("message", {}).get("text", "")` para `data.get("data", {}).get("message", {}).get("conversation")`.
-2.  **Tratamento de Erros Melhorado:** O código agora não devolve um erro `500` se receber um evento que não seja uma mensagem de texto (ex: alguém entra num grupo). Ele simplesmente ignora e responde `200 OK`, o que é mais robusto.
-3.  **Logging:** Adicionei logs (`logger.info`) para que, no futuro, você possa ver nos logs do `rag-api` exatamente o que a Evolution API está a enviar, facilitando a depuração.
-
-### **Próximos Passos**
-
-1.  **Atualize `app.py`:** Substitua o código no seu ficheiro `app.py` local por esta nova versão.
-2.  **Envie para o GitHub:** Faça o commit e o push da alteração para o seu repositório.
-    ```bash
-    git add app.py
-    git commit -m "Corrige o parse do payload do webhook da Evolution API"
-    git push
-    
-
